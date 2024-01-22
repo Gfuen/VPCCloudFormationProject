@@ -70,6 +70,7 @@ Resources:
         # ********** This is really the only adjustment we need to make to enable use of SSM Session Manager
         #            All the AWS::CloudFormation::Init and cloud init script work is setting up cloudwatch logs
         #            to give visibility to the SSM Agent actions.
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
         - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
       AssumeRolePolicyDocument:
         Statement:
@@ -79,6 +80,14 @@ Resources:
             Action:
               - sts:AssumeRole
       Path: /
+  NewKeyPair1:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: MyKeyPair
+  NewKeyPair2:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: MyKeyPairTwo
 
   # Attaching an SG with VPC Ingress from the other VPC
 
@@ -92,28 +101,6 @@ Resources:
     Properties:
       VpcId: !Ref Vpc2
       GroupDescription: VPC2 Security Group
-  InboundRule1:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      IpProtocol: icmp
-      FromPort: -1
-      ToPort: -1
-      GroupId:
-        Fn::GetAtt:
-          - SG2
-          - GroupId
-      CidrIp: !Ref VpcCidr
-  InboundRule2:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      IpProtocol: icmp
-      FromPort: -1
-      ToPort: -1
-      GroupId:
-        Fn::GetAtt:
-          - SG1
-          - GroupId
-      CidrIp: !Ref VpcCidr2
   OutboundRule1:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
@@ -141,8 +128,8 @@ Resources:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
+      FromPort: 0
+      ToPort: 65535
       GroupId:
         Fn::GetAtt:
           - SG1
@@ -153,8 +140,30 @@ Resources:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
+      FromPort: 0
+      ToPort: 65535
+      GroupId:
+        Fn::GetAtt:
+          - SG2
+          - GroupId
+      CidrIp: 0.0.0.0/0
+  InboundRuleSSHSSM:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      GroupId:
+        Fn::GetAtt:
+          - SG1
+          - GroupId
+      CidrIp: 0.0.0.0/0
+  InboundRuleSSHSSM2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
       GroupId:
         Fn::GetAtt:
           - SG2
@@ -177,7 +186,7 @@ Resources:
 
         # Here the instance is in a private subnet with a default route to the NAT Gateway so we can use that to
         # connect to the SSM's public endpoint
-        - AssociatePublicIpAddress: false
+        - AssociatePublicIpAddress: true
           DeviceIndex: 0
           GroupSet:
             - !Ref SG1
@@ -185,6 +194,11 @@ Resources:
       Tags:
         - Key: Name
           Value: Session Manager Test Instance in Private Subnet with VPCEndpoint1
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
 
   Ec2InPrivateSubnetWithVPCEndpoint2:
     Type: AWS::EC2::Instance
@@ -200,7 +214,7 @@ Resources:
 
         # Here the instance is in a private subnet with a default route to the NAT Gateway so we can use that to
         # connect to the SSM's public endpoint
-        - AssociatePublicIpAddress: false
+        - AssociatePublicIpAddress: true
           DeviceIndex: 0
           GroupSet:
             - !Ref SG2
@@ -208,6 +222,11 @@ Resources:
       Tags:
         - Key: Name
           Value: Session Manager test Instnace in Private Subnet with VPCEndpoint2
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
 
 
 
